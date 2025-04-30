@@ -1,0 +1,6 @@
+paper/*
+data/*
+representation_learning/wandb/*
+representation_learning/default/*
+.vscode/*
+*.pyc

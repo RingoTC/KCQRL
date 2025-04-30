@@ -102,7 +102,6 @@ class Trainer:
         loss = self.contrastive_loss(question_kc_score, batch['kc_quest_pairs'], batch['cluster_kc_quest_pairs']) + \
             self.alpha * self.contrastive_loss(step_kc_score, batch['kc_step_pairs'], batch['cluster_kc_step_pairs'])
 
-        #print("Loss:", loss.item())
         return loss
 
 
@@ -118,7 +117,7 @@ class Trainer:
         if not self.disable_clusters:
             neg_mask[clustered_pair_indices[:, 1], clustered_pair_indices[:, 0]] = 0
         
-        pos_score = score_matrix * pos_mask
+        pos_score = score_matrix * pos_mask # pos score 里有 0
         neg_score = score_matrix * neg_mask
 
         pos_score_sum = pos_score.sum(dim=-1)
@@ -132,16 +131,18 @@ class Trainer:
         pos_score_sum = pos_score_sum.clamp(min=1e-8)  # Avoid log(0)
 
         # Calculate the loss for each element in pos_score
-        element_loss = -1 * torch.log(pos_score / scores_sum.unsqueeze(-1))
+        ratio = pos_score / scores_sum.unsqueeze(-1)  # 这里可能有0/small_number
+        ratio = torch.clamp(ratio, min=1e-8)  # 避免log(0)
+        element_loss = -1 * torch.log(ratio)  # 现在不会有inf
 
         # Mask out the elements that are zero in pos_score
-        element_loss = element_loss * pos_mask
+        element_loss = element_loss * pos_mask  # 只保留正样本位置的loss
 
         # Calculate the mean loss for each row, considering only non-zero elements
         row_loss = element_loss.sum(dim=-1) / pos_mask.sum(dim=-1).clamp(min=1e-8)
 
         # Filter out rows where pos_mask has no positives
-        valid_rows = pos_mask.sum(dim=-1) > 0  # Boolean mask of rows with at least one positive
+        valid_rows = pos_mask.sum(dim=-1) > 0  # Boolean mask of rows with at least one positive  然后这里就会全部都是nan
         row_loss = row_loss[valid_rows]  # Filter to include only valid rows
 
         # Compute the mean loss over valid rows only
